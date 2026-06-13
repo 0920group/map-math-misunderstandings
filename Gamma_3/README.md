@@ -1,126 +1,129 @@
-# Math Misconception Classifier — Gemma 3 1B QLoRA Fine-tuning
+# Gamma_3 Math Misconception Pipeline
 
-Fine-tunes **Google Gemma-3-1B-IT** with QLoRA (4-bit NF4) + LoRA adapters to classify student math misconceptions into `Category:Misconception` labels.
+This folder contains the training, inference, and ensemble workflows for the math misconception classification task.
 
----
+## What is included
 
-## Hardware Requirements
+- `Gemma_3.py`: main training and validation script
+- `inference_version1.ipynb` ~ `inference_version10.ipynb`: Kaggle inference notebooks
+- `essemble_kubeflow_qlora_train.ipynb`: multi-model QLoRA training and RRF ensemble notebook
+- `requirements.txt` and `requirement.txt`: Python packages referenced by the code in this folder
 
-| Item | Minimum |
-|------|---------|
-| GPU | NVIDIA GPU with **CUDA 13.x** support |
-| VRAM | ≥ 8 GB (fp16 mode) / ≥ 10 GB (bf16 recommended) |
-| Disk | ≥ 10 GB for model weights and checkpoints |
+## Python packages
 
----
+The packages used by the code in `Gamma_3` are listed in [`requirements.txt`](./requirements.txt) and [`requirement.txt`](./requirement.txt).
 
-## Environment Setup
+Included packages:
 
-### 1. Create a virtual environment
+- `torch`
+- `transformers`
+- `peft`
+- `datasets`
+- `trl`
+- `accelerate`
+- `bitsandbytes`
+- `huggingface_hub`
+- `numpy`
+- `pandas`
+- `scikit-learn`
+- `tqdm`
+- `matplotlib`
+- `seaborn`
+- `sentencepiece`
 
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux / macOS
-source .venv/bin/activate
-```
+Standard-library modules such as `os`, `gc`, `pathlib`, `collections`, `math`, `re`, and `time` are not listed because they ship with Python.
 
-### 2. Install dependencies
+## Installation
+
+If you are running locally or in an environment without these packages preinstalled, install them with:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> **Note:** `torch==2.12.0+cu132` is pulled from the PyTorch CUDA 13.2 index declared in `requirements.txt`.  
-> If your CUDA version differs, replace `cu132` with the matching suffix (e.g. `cu121`).
+If you prefer the singular file name, `pip install -r requirement.txt` works too because it contains the same package list.
 
-### 3. Hugging Face authentication
+If you are running on Kaggle or Kubeflow, the notebook image/runtime may already provide part of the stack, so only install missing packages if the runtime does not already include them.
 
-Gemma 3 is a gated model. Log in before running:
+## Execution flow
 
-```bash
-huggingface-cli login
-# paste the token from huggingface_key.txt when prompted
-```
+### 1. Train or fine-tune the base model
 
----
-
-## Project Structure
-
-```
-nlp_final_project/
-├── Gemma_3.py                          # Main training & evaluation script
-├── train.csv                           # Training data (required)
-├── test.csv                            # Test data
-├── sample_submission.csv               # Submission template
-├── requirements.txt                    # Python dependencies
-├── best_gemma_lora_model/              # Best LoRA checkpoint (saved after training)
-├── gemma_math_misunderstanding_results/# All Trainer checkpoints
-├── loss_curve.png                      # Training / eval loss plot
-└── confusion_matrix.png                # Evaluation confusion matrix
-```
-
----
-
-## Data Format
-
-`train.csv` must contain the following columns:
-
-| Column | Description |
-|--------|-------------|
-| `QuestionText` | Math question text |
-| `MC_Answer` | The correct answer |
-| `StudentExplanation` | Student's written explanation |
-| `Category` | Ground-truth misconception category |
-| `Misconception` | Specific misconception name (or blank for NA) |
-
----
-
-## Running the Script
+Run:
 
 ```bash
 python Gemma_3.py
 ```
 
-The script will:
+This script:
 
-1. Load and split `train.csv` (90 / 10 stratified split)
-2. Load `google/gemma-3-1b-it` in 4-bit NF4 quantization
-3. Attach LoRA adapters (r=32, alpha=64) to all attention + MLP projection layers
-4. Fine-tune for up to 3 epochs with early stopping (patience = 3)
-5. Save the best LoRA weights to `./best_gemma_lora_model/`
-6. Evaluate on 100 validation samples and print a classification report
-7. Save `loss_curve.png` and `confusion_matrix.png`
+1. Loads `train.csv`
+2. Builds `Category:Misconception` labels
+3. Splits the data into train/validation
+4. Loads `google/gemma-3-1b-it` with 4-bit QLoRA
+5. Trains the model with LoRA adapters
+6. Saves the best adapter to `./best_gemma_lora_model/`
+7. Saves checkpoints to `./gemma_math_misunderstanding_results/`
+8. Produces `loss_curve.png` and `confusion_matrix.png`
 
-### Resume from checkpoint
+### 2. Inference on Kaggle Notebook
 
-If training is interrupted, re-run the same command. The script automatically detects the latest checkpoint in `gemma_math_misunderstanding_results/` and resumes from it.
+The inference notebooks are designed to run on **Kaggle Notebook with T4 GPU**.
 
----
+Important notes:
 
-## Key Hyperparameters
+- The execution environment is the Kaggle notebook runtime.
+- The GPU target is T4.
+- The package versions used for inference should follow the versions provided by Kaggle's notebook environment.
+- The notebooks read inputs from `/kaggle/input/...` and write outputs to `/kaggle/working/...`.
+- The model and adapter paths in the notebooks are already written for Kaggle mount points.
 
-| Parameter | Value |
-|-----------|-------|
-| Base model | `google/gemma-3-1b-it` |
-| Quantization | 4-bit NF4 (double quant) |
-| LoRA rank (r) | 32 |
-| LoRA alpha | 64 |
-| LoRA dropout | 0.05 |
-| Learning rate | 2e-4 |
-| Batch size | 2 (× 4 gradient accumulation = effective 8) |
-| Max sequence length | 1024 |
-| Epochs | 3 (with early stopping) |
-| Loss type | chunked NLL (memory-efficient) |
+Recommended inference steps:
 
----
+1. Open one of the `inference_version*.ipynb` notebooks in Kaggle.
+2. Confirm the base model path and adapter path.
+3. Run the cells in order.
+4. Generate `submission.csv` in `/kaggle/working/`.
 
-## Output Files
+### 3. Ensemble on Kubeflow
 
-| File | Description |
-|------|-------------|
-| `best_gemma_lora_model/` | LoRA adapter weights + tokenizer |
-| `gemma_math_misunderstanding_results/` | All training checkpoints |
-| `loss_curve.png` | Train vs. eval loss over steps |
-| `confusion_matrix.png` | Predicted vs. true label heatmap |
+The ensemble workflow is implemented in `essemble_kubeflow_qlora_train.ipynb`.
+
+Important notes:
+
+- The ensemble section is intended to run with the **Kubeflow-side package versions**.
+- Use the Kubeflow notebook or pipeline image that matches the package versions required by this ensemble workflow.
+- The notebook sequentially fine-tunes multiple base models, saves their adapters, then runs Reciprocal Rank Fusion (RRF) for final prediction fusion.
+- When you move this notebook into Kubeflow, keep the package versions aligned with the Kubeflow environment rather than the Kaggle inference runtime.
+
+Recommended ensemble steps:
+
+1. Prepare `train.csv` in the working directory.
+2. Set `HF_TOKEN` if the base models require authentication.
+3. Run the training cells for each model in `MODEL_LIST`.
+4. Save the adapters under `FINAL_WEIGHTS_ROOT`.
+5. Run the inference and RRF fusion cells.
+6. Review the final MAP@3 score on the holdout set.
+
+## Folder conventions
+
+- Training outputs: `best_gemma_lora_model/`
+- Checkpoints: `gemma_math_misunderstanding_results/`
+- Kaggle inference outputs: `/kaggle/working/submission.csv`
+- Kubeflow ensemble outputs: `./kubeflow_artifacts/`
+
+## Data format
+
+`train.csv` must contain these columns:
+
+- `QuestionText`
+- `MC_Answer`
+- `StudentExplanation`
+- `Category`
+- `Misconception`
+
+## Notes
+
+- `Gemma_3.py` is the most direct entry point for local training and validation.
+- The Kaggle inference notebooks are focused on generating predictions only.
+- The Kubeflow ensemble notebook is intended for multi-model training plus RRF fusion.

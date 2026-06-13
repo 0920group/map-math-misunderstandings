@@ -1,0 +1,35 @@
+# ============================================================
+# MathBERT — MAP (Charting Student Math Misunderstandings)
+# 5-Fold Fine-tuning + Ensemble Inference
+#
+# 執行環境：Kaggle Notebook（GPU，建議 T4 x2 / P100）
+# 對應 Kaggle Docker image：v166（2026-02 起逐步上線）
+# 注意：以下套件 Kaggle 環境皆已內建，正常情況「不需要」pip install。
+#       本檔案僅作為環境紀錄與本地重現用途。
+# ============================================================
+
+# --- 深度學習核心 ---
+torch>=2.6                 # Kaggle 內建（CUDA 12.x 版）
+transformers>=4.50,<6      # Kaggle 內建；v166 起隨 image 升級至 5.x 系列
+huggingface-hub==1.4.1     # Kaggle v166 內建版本
+accelerate==1.12.0         # Kaggle v166 內建版本（transformers 訓練相依）
+tokenizers>=0.22
+
+# --- 資料處理 ---
+pandas>=2.2                # Kaggle 內建（新 image 已進入 3.0 系列）
+numpy>=1.26,<3             # Kaggle 內建
+
+# --- 機器學習工具 ---
+scikit-learn>=1.5          # StratifiedKFold / LabelEncoder
+
+# --- 進度條 ---
+tqdm>=4.67                 # Kaggle v166 內建 4.67.3
+
+# ============================================================
+# 在 Kaggle 上鎖定「當下實際版本」：
+# 於 notebook 第一個 cell 執行以下指令，即可產生精確版本快照：
+#
+#   !pip list --format=freeze 2>/dev/null | grep -iE \
+#     "^(torch|transformers|tokenizers|huggingface|accelerate|pandas|numpy|scikit-learn|tqdm)==" \
+#     > requirements.lock.txt
+# ============================================================
